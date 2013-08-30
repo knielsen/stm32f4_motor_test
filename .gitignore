@@ -1,0 +1,5 @@
+*~
+*.o
+motordriver-test.bin
+motordriver-test.elf
+motordriver-test.hex
