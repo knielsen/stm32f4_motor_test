@@ -44,23 +44,23 @@ static void setup_serial(void)
   GPIO_InitTypeDef GPIO_InitStructure;
   USART_InitTypeDef USART_InitStructure;
 
-  /* enable peripheral clock for USART2 */
-  RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART2, ENABLE);
+  /* enable peripheral clock for USART1 */
+  RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART1, ENABLE);
 
   /* GPIOA clock enable */
   RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA, ENABLE);
 
-  /* GPIOA Configuration:  USART2 TX on PA2 */
-  GPIO_InitStructure.GPIO_Pin = GPIO_Pin_2;
+  /* GPIOA Configuration:  USART1 TX on PA9 */
+  GPIO_InitStructure.GPIO_Pin = GPIO_Pin_9;
   GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
   GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
   GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
   GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP ;
   GPIO_Init(GPIOA, &GPIO_InitStructure);
 
-  /* Connect USART2 pins to AF2 */
-  // TX = PA2
-  GPIO_PinAFConfig(GPIOA, GPIO_PinSource2, GPIO_AF_USART2);
+  /* Connect USART1 pins to AF2 */
+  // TX = PA9
+  GPIO_PinAFConfig(GPIOA, GPIO_PinSource9, GPIO_AF_USART1);
 
   USART_InitStructure.USART_BaudRate = 115200;
   USART_InitStructure.USART_WordLength = USART_WordLength_8b;
@@ -68,9 +68,9 @@ static void setup_serial(void)
   USART_InitStructure.USART_Parity = USART_Parity_No;
   USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
   USART_InitStructure.USART_Mode = USART_Mode_Tx;
-  USART_Init(USART2, &USART_InitStructure);
+  USART_Init(USART1, &USART_InitStructure);
 
-  USART_Cmd(USART2, ENABLE); // enable USART2
+  USART_Cmd(USART1, ENABLE); // enable USART1
 }
 
 
@@ -319,55 +319,55 @@ int main(void)
   setup_serial();
   setup_gpio();
   setup_led();
-  serial_puts(USART2, "Initialising...\r\n");
+  serial_puts(USART1, "Initialising...\r\n");
   set_channel(1, 0);
   set_channel(2, 0);
   set_channel(3, 0);
   delay(2000000);
 
-  serial_puts(USART2, "Hello world, ready to blink!\r\n");
+  serial_puts(USART1, "Hello world, ready to blink!\r\n");
 
   while (1)
   {
     set_channel(1, 0);
     set_channel(2, 1);
     set_channel(3, -1);
-    serial_puts(USART2, "a");
+    serial_puts(USART1, "a");
     led_off();
     delay(m_delay);
 
     set_channel(1, -1);
     set_channel(2, 1);
     set_channel(3, 0);
-    serial_puts(USART2, "b");
+    serial_puts(USART1, "b");
     led_on();
     delay(m_delay);
 
     set_channel(1, -1);
     set_channel(2, 0);
     set_channel(3, 1);
-    serial_puts(USART2, "c");
+    serial_puts(USART1, "c");
     led_off();
     delay(m_delay);
 
     set_channel(1, 0);
     set_channel(2, -1);
     set_channel(3, 1);
-    serial_puts(USART2, "d");
+    serial_puts(USART1, "d");
     led_on();
     delay(m_delay);
 
     set_channel(1, 1);
     set_channel(2, -1);
     set_channel(3, 0);
-    serial_puts(USART2, "e");
+    serial_puts(USART1, "e");
     led_off();
     delay(m_delay);
 
     set_channel(1, 1);
     set_channel(2, 0);
     set_channel(3, -1);
-    serial_puts(USART2, "f");
+    serial_puts(USART1, "f");
     led_on();
     delay(m_delay);
   }
