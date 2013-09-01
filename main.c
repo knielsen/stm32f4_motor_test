@@ -95,21 +95,21 @@ setup_gpio(void)
 }
 
 
+static const uint32_t pwm_period = 84000000/50000-1;
+
 static void
 setup_timer(void)
 {
   GPIO_InitTypeDef GPIO_InitStructure;
   TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
   TIM_OCInitTypeDef TIM_OCInitStructure;
-  uint32_t period;
 
-  period = 84000000/50000-1;
   RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM5, ENABLE);
   RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA, ENABLE);
 
   GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0 | GPIO_Pin_1 | GPIO_Pin_2 | GPIO_Pin_3;
   GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
-  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
+  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_25MHz;
   GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
   GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL ;
   GPIO_Init(GPIOA, &GPIO_InitStructure);
@@ -119,7 +119,7 @@ setup_timer(void)
   GPIO_PinAFConfig(GPIOA, GPIO_PinSource2, GPIO_AF_TIM5);
   GPIO_PinAFConfig(GPIOA, GPIO_PinSource3, GPIO_AF_TIM5);
 
-  TIM_TimeBaseStructure.TIM_Period = period;
+  TIM_TimeBaseStructure.TIM_Period = pwm_period;
   TIM_TimeBaseStructure.TIM_Prescaler = 0;
   TIM_TimeBaseStructure.TIM_ClockDivision = 0;
   TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
@@ -127,7 +127,7 @@ setup_timer(void)
 
   TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
   TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
-  TIM_OCInitStructure.TIM_Pulse = period/40;
+  TIM_OCInitStructure.TIM_Pulse = 0;
   TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
 
   TIM_OC1Init(TIM5, &TIM_OCInitStructure);
@@ -135,6 +135,21 @@ setup_timer(void)
   TIM_OC1PreloadConfig(TIM5, TIM_OCPreload_Enable);
   TIM_ARRPreloadConfig(TIM5, ENABLE);
   TIM_Cmd(TIM5, ENABLE);
+}
+
+
+static void
+setup_timer_interrupt(void)
+{
+  NVIC_InitTypeDef NVIC_InitStructure;
+
+  NVIC_InitStructure.NVIC_IRQChannel = TIM5_IRQn;
+  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 10;
+  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+  NVIC_Init(&NVIC_InitStructure);
+
+  TIM_ITConfig(TIM5, TIM_IT_Update, ENABLE);
 }
 
 
@@ -354,6 +369,18 @@ println_float(USART_TypeDef* usart, float f,
 }
 
 
+static volatile uint32_t pwm_pulse_width = 0;
+
+void TIM5_IRQHandler(void)
+{
+  if (TIM_GetITStatus(TIM5, TIM_IT_Update) != RESET)
+  {
+    TIM_ClearITPendingBit(TIM5, TIM_IT_Update);
+    TIM5->CCR1 = pwm_pulse_width;
+  }
+}
+
+
 int main(void)
 {
   static const uint32_t m_delay = 10000000;
@@ -363,6 +390,7 @@ int main(void)
   setup_gpio();
   setup_led();
   setup_timer();
+  setup_timer_interrupt();
   serial_puts(USART1, "Initialising...\r\n");
   set_channel(1, 0);
   set_channel(2, 0);
@@ -378,6 +406,7 @@ int main(void)
     set_channel(3, -1);
     serial_puts(USART1, "a");
     led_off();
+    pwm_pulse_width = pwm_period/6;
     delay(m_delay);
 
     set_channel(1, -1);
@@ -385,6 +414,7 @@ int main(void)
     set_channel(3, 0);
     serial_puts(USART1, "b");
     led_on();
+    pwm_pulse_width = 2*pwm_period/6;
     delay(m_delay);
 
     set_channel(1, -1);
@@ -392,6 +422,7 @@ int main(void)
     set_channel(3, 1);
     serial_puts(USART1, "c");
     led_off();
+    pwm_pulse_width = 3*pwm_period/6;
     delay(m_delay);
 
     set_channel(1, 0);
@@ -399,6 +430,7 @@ int main(void)
     set_channel(3, 1);
     serial_puts(USART1, "d");
     led_on();
+    pwm_pulse_width = 4*pwm_period/6;
     delay(m_delay);
 
     set_channel(1, 1);
@@ -406,6 +438,7 @@ int main(void)
     set_channel(3, 0);
     serial_puts(USART1, "e");
     led_off();
+    pwm_pulse_width = 5*pwm_period/6;
     delay(m_delay);
 
     set_channel(1, 1);
@@ -413,6 +446,7 @@ int main(void)
     set_channel(3, -1);
     serial_puts(USART1, "f");
     led_on();
+    pwm_pulse_width = pwm_period-1;
     delay(m_delay);
   }
 
