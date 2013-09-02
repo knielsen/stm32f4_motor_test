@@ -16,20 +16,24 @@
 
 /*
   I/O pins used to control the motor driver.
-  PB3 and PB4 default to debug/jtag stuff, so use PB0-2 and PB5-7.
-
-  Each of the three channels need an enable ENn and an input INn.
+  EN use channel 1/2/3 of TIM4 on PA0/1/2.
+  IN 1/2/3 use PA4/PA5/PA8
 */
 #define CHAN_EN1 GPIO_Pin_0  /* Connect to pin 3 on L6234 DIP20 */
-#define CHAN_IN1 GPIO_Pin_1             /* pin 2 */
-#define CHAN_EN2 GPIO_Pin_2             /* pin 18 */
+#define CHAN_IN1 GPIO_Pin_4             /* pin 2 */
+#define CHAN_EN2 GPIO_Pin_1             /* pin 18 */
 #define CHAN_IN2 GPIO_Pin_5             /* pin 19 */
-#define CHAN_EN3 GPIO_Pin_6             /* pin 8 */
-#define CHAN_IN3 GPIO_Pin_7             /* pin 9 */
+#define CHAN_EN3 GPIO_Pin_2             /* pin 8 */
+#define CHAN_IN3 GPIO_Pin_8             /* pin 9 */
 
 
 /* This is apparently needed for libc/libm (eg. powf()). */
 int __errno;
+
+static volatile uint32_t pwm_pulse_width = 0;
+static volatile uint32_t pwm_pulse_width_1 = 0;
+static volatile uint32_t pwm_pulse_width_2 = 0;
+static volatile uint32_t pwm_pulse_width_3 = 0;
 
 
 static void delay(__IO uint32_t nCount)
@@ -79,23 +83,17 @@ setup_gpio(void)
 {
   GPIO_InitTypeDef GPIO_InitStructure;
 
-  /*
-    Let's set up PB0-5 as output pins.
-    PB0,4,6 is enable for channel 1,2,3.
-    PB1,5,7 is IN for channel 1,2,3.
-  */
-  RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOB, ENABLE);
-  GPIO_InitStructure.GPIO_Pin =
-    CHAN_EN1|CHAN_IN1|CHAN_EN2|CHAN_IN2|CHAN_EN3|CHAN_IN3;
+  RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA, ENABLE);
+  GPIO_InitStructure.GPIO_Pin = CHAN_IN1|CHAN_IN2|CHAN_IN3;
   GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_OUT;
-  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
+  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_25MHz;
   GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
   GPIO_InitStructure.GPIO_PuPd  = GPIO_PuPd_NOPULL;
-  GPIO_Init(GPIOB, &GPIO_InitStructure);
+  GPIO_Init(GPIOA, &GPIO_InitStructure);
 }
 
 
-static const uint32_t pwm_period = 84000000/50000-1;
+static const uint32_t pwm_period = 84000000/50000;
 
 static void
 setup_timer(void)
@@ -104,25 +102,39 @@ setup_timer(void)
   TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
   TIM_OCInitTypeDef TIM_OCInitStructure;
 
+  RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, ENABLE);
+  RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, ENABLE);
   RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM5, ENABLE);
   RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA, ENABLE);
+  RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOB, ENABLE);
 
-  GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0 | GPIO_Pin_1 | GPIO_Pin_2 | GPIO_Pin_3;
+  GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0 | GPIO_Pin_1 | GPIO_Pin_2 |
+    GPIO_Pin_6 | GPIO_Pin_7;
   GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
   GPIO_InitStructure.GPIO_Speed = GPIO_Speed_25MHz;
   GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
   GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL ;
   GPIO_Init(GPIOA, &GPIO_InitStructure);
+  GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0 | GPIO_Pin_6 | GPIO_Pin_7 |
+    GPIO_Pin_8;
+  GPIO_Init(GPIOB, &GPIO_InitStructure);
 
+  GPIO_PinAFConfig(GPIOA, GPIO_PinSource6, GPIO_AF_TIM3);
+  GPIO_PinAFConfig(GPIOA, GPIO_PinSource7, GPIO_AF_TIM3);
+  GPIO_PinAFConfig(GPIOB, GPIO_PinSource0, GPIO_AF_TIM3);
+  GPIO_PinAFConfig(GPIOB, GPIO_PinSource6, GPIO_AF_TIM4);
+  GPIO_PinAFConfig(GPIOB, GPIO_PinSource7, GPIO_AF_TIM4);
+  GPIO_PinAFConfig(GPIOB, GPIO_PinSource8, GPIO_AF_TIM4);
   GPIO_PinAFConfig(GPIOA, GPIO_PinSource0, GPIO_AF_TIM5);
   GPIO_PinAFConfig(GPIOA, GPIO_PinSource1, GPIO_AF_TIM5);
   GPIO_PinAFConfig(GPIOA, GPIO_PinSource2, GPIO_AF_TIM5);
-  GPIO_PinAFConfig(GPIOA, GPIO_PinSource3, GPIO_AF_TIM5);
 
-  TIM_TimeBaseStructure.TIM_Period = pwm_period;
+  TIM_TimeBaseStructure.TIM_Period = pwm_period-1;
   TIM_TimeBaseStructure.TIM_Prescaler = 0;
   TIM_TimeBaseStructure.TIM_ClockDivision = 0;
   TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
+  TIM_TimeBaseInit(TIM3, &TIM_TimeBaseStructure);
+  TIM_TimeBaseInit(TIM4, &TIM_TimeBaseStructure);
   TIM_TimeBaseInit(TIM5, &TIM_TimeBaseStructure);
 
   TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
@@ -130,10 +142,30 @@ setup_timer(void)
   TIM_OCInitStructure.TIM_Pulse = 0;
   TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
 
+  TIM_OC1Init(TIM3, &TIM_OCInitStructure);
+  TIM_OC2Init(TIM3, &TIM_OCInitStructure);
+  TIM_OC3Init(TIM3, &TIM_OCInitStructure);
+  TIM_OC1Init(TIM4, &TIM_OCInitStructure);
+  TIM_OC2Init(TIM4, &TIM_OCInitStructure);
+  TIM_OC3Init(TIM4, &TIM_OCInitStructure);
   TIM_OC1Init(TIM5, &TIM_OCInitStructure);
+  TIM_OC2Init(TIM5, &TIM_OCInitStructure);
+  TIM_OC3Init(TIM5, &TIM_OCInitStructure);
 
+  TIM_OC1PreloadConfig(TIM3, TIM_OCPreload_Enable);
+  TIM_OC2PreloadConfig(TIM3, TIM_OCPreload_Enable);
+  TIM_OC3PreloadConfig(TIM3, TIM_OCPreload_Enable);
+  TIM_OC1PreloadConfig(TIM4, TIM_OCPreload_Enable);
+  TIM_OC2PreloadConfig(TIM4, TIM_OCPreload_Enable);
+  TIM_OC3PreloadConfig(TIM4, TIM_OCPreload_Enable);
   TIM_OC1PreloadConfig(TIM5, TIM_OCPreload_Enable);
+  TIM_OC2PreloadConfig(TIM5, TIM_OCPreload_Enable);
+  TIM_OC3PreloadConfig(TIM5, TIM_OCPreload_Enable);
+  TIM_ARRPreloadConfig(TIM3, ENABLE);
+  TIM_ARRPreloadConfig(TIM4, ENABLE);
   TIM_ARRPreloadConfig(TIM5, ENABLE);
+  TIM_Cmd(TIM3, ENABLE);
+  TIM_Cmd(TIM4, ENABLE);
   TIM_Cmd(TIM5, ENABLE);
 }
 
@@ -143,12 +175,18 @@ setup_timer_interrupt(void)
 {
   NVIC_InitTypeDef NVIC_InitStructure;
 
-  NVIC_InitStructure.NVIC_IRQChannel = TIM5_IRQn;
+  NVIC_InitStructure.NVIC_IRQChannel = TIM3_IRQn;
   NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 10;
   NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
   NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
   NVIC_Init(&NVIC_InitStructure);
+  NVIC_InitStructure.NVIC_IRQChannel = TIM4_IRQn;
+  NVIC_Init(&NVIC_InitStructure);
+  NVIC_InitStructure.NVIC_IRQChannel = TIM5_IRQn;
+  NVIC_Init(&NVIC_InitStructure);
 
+  TIM_ITConfig(TIM3, TIM_IT_Update, ENABLE);
+  TIM_ITConfig(TIM4, TIM_IT_Update, ENABLE);
   TIM_ITConfig(TIM5, TIM_IT_Update, ENABLE);
 }
 
@@ -186,19 +224,20 @@ led_off(void)
 static void
 set_channel(unsigned channel, int level)
 {
-  unsigned in, enable;
+  unsigned in;
+  volatile uint32_t *enable;
   switch (channel)
   {
   case 1:
-    enable = CHAN_EN1;
+    enable = &pwm_pulse_width_1;
     in = CHAN_IN1;
     break;
   case 2:
-    enable = CHAN_EN2;
+    enable = &pwm_pulse_width_2;
     in = CHAN_IN2;
     break;
   case 3:
-    enable = CHAN_EN3;
+    enable = &pwm_pulse_width_3;
     in = CHAN_IN3;
     break;
   default:
@@ -207,16 +246,16 @@ set_channel(unsigned channel, int level)
 
   if (level < 0)
   {
-    GPIO_SetBits(GPIOB, enable);
-    GPIO_ResetBits(GPIOB, in);
+    *enable = pwm_period;
+    GPIO_ResetBits(GPIOA, in);
   }
   else if (level > 0)
   {
-    GPIO_SetBits(GPIOB, enable);
-    GPIO_SetBits(GPIOB, in);
+    *enable = pwm_period;
+    GPIO_SetBits(GPIOA, in);
   }
   else
-    GPIO_ResetBits(GPIOB, enable);
+    *enable = 0;
 }
 
 
@@ -369,14 +408,34 @@ println_float(USART_TypeDef* usart, float f,
 }
 
 
-static volatile uint32_t pwm_pulse_width = 0;
+void TIM3_IRQHandler(void)
+{
+  if (TIM_GetITStatus(TIM3, TIM_IT_Update) != RESET)
+  {
+    TIM_ClearITPendingBit(TIM3, TIM_IT_Update);
+    TIM3->CCR1 = pwm_pulse_width;
+  }
+}
+
+
+void TIM4_IRQHandler(void)
+{
+  if (TIM_GetITStatus(TIM4, TIM_IT_Update) != RESET)
+  {
+    TIM_ClearITPendingBit(TIM4, TIM_IT_Update);
+    TIM4->CCR1 = pwm_pulse_width;
+  }
+}
+
 
 void TIM5_IRQHandler(void)
 {
   if (TIM_GetITStatus(TIM5, TIM_IT_Update) != RESET)
   {
     TIM_ClearITPendingBit(TIM5, TIM_IT_Update);
-    TIM5->CCR1 = pwm_pulse_width;
+    TIM5->CCR1 = pwm_pulse_width_1;
+    TIM5->CCR2 = pwm_pulse_width_2;
+    TIM5->CCR3 = pwm_pulse_width_3;
   }
 }
 
@@ -446,7 +505,7 @@ int main(void)
     set_channel(3, -1);
     serial_puts(USART1, "f");
     led_on();
-    pwm_pulse_width = pwm_period-1;
+    pwm_pulse_width = pwm_period;
     delay(m_delay);
   }
 
