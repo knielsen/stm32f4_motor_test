@@ -31,9 +31,9 @@
 int __errno;
 
 static volatile uint32_t pwm_pulse_width = 0;
-static volatile uint32_t pwm_pulse_width_1 = 0;
-static volatile uint32_t pwm_pulse_width_2 = 0;
-static volatile uint32_t pwm_pulse_width_3 = 0;
+static volatile int32_t pwm_pulse_width_1 = 0;
+static volatile int32_t pwm_pulse_width_2 = 0;
+static volatile int32_t pwm_pulse_width_3 = 0;
 
 
 static void delay(__IO uint32_t nCount)
@@ -220,12 +220,25 @@ led_off(void)
 }
 
 
-/* Set a channel to given level (-1, 0, or 1). */
+/*
+  Set a channel to given level (-1, 0, or 1).
+
+  LEVEL set to 0 turns off the channel (EN=0).
+  LEVEL set to -1 or 1 turns on the channel (EN=1) and sets IN=0 or 1.
+
+  DUTY controls the PWM and polarity.
+  The absolute value of DUTY sets the duty cycle for EN (0->0%, 1->100%).
+
+  The sign sets the polarity (positive enables at the start of the PWM period,
+  negative at the nd of the period).
+*/
 static void
-set_channel(unsigned channel, int level)
+set_channel(unsigned channel, int level, float duty)
 {
   unsigned in;
-  volatile uint32_t *enable;
+  volatile int32_t *enable;
+  int32_t period;
+
   switch (channel)
   {
   case 1:
@@ -244,14 +257,15 @@ set_channel(unsigned channel, int level)
     return;
   }
 
+  period = (int32_t)(duty*pwm_period);
   if (level < 0)
   {
-    *enable = pwm_period;
+    *enable = period;
     GPIO_ResetBits(GPIOA, in);
   }
   else if (level > 0)
   {
-    *enable = pwm_period;
+    *enable = period;
     GPIO_SetBits(GPIOA, in);
   }
   else
@@ -430,12 +444,47 @@ void TIM4_IRQHandler(void)
 
 void TIM5_IRQHandler(void)
 {
+  int32_t tmp;
+
   if (TIM_GetITStatus(TIM5, TIM_IT_Update) != RESET)
   {
     TIM_ClearITPendingBit(TIM5, TIM_IT_Update);
-    TIM5->CCR1 = pwm_pulse_width_1;
-    TIM5->CCR2 = pwm_pulse_width_2;
-    TIM5->CCR3 = pwm_pulse_width_3;
+
+    tmp = pwm_pulse_width_1;
+    if (tmp < 0)
+    {
+      TIM5->CCR1 = pwm_period + (uint32_t)tmp;
+      TIM_OC1PolarityConfig(TIM5, TIM_OCPolarity_Low);
+    }
+    else
+    {
+      TIM5->CCR1 = (uint32_t)tmp;
+      TIM_OC1PolarityConfig(TIM5, TIM_OCPolarity_High);
+    }
+
+    tmp = pwm_pulse_width_2;
+    if (tmp < 0)
+    {
+      TIM5->CCR2 = pwm_period +  (uint32_t)tmp;
+      TIM_OC2PolarityConfig(TIM5, TIM_OCPolarity_Low);
+    }
+    else
+    {
+      TIM5->CCR2 = (uint32_t)tmp;
+      TIM_OC2PolarityConfig(TIM5, TIM_OCPolarity_High);
+    }
+
+    tmp = pwm_pulse_width_3;
+    if (tmp < 0)
+    {
+      TIM5->CCR3 = pwm_period + (uint32_t)tmp;
+      TIM_OC3PolarityConfig(TIM5, TIM_OCPolarity_Low);
+    }
+    else
+    {
+      TIM5->CCR3 = (uint32_t)tmp;
+      TIM_OC3PolarityConfig(TIM5, TIM_OCPolarity_High);
+    }
   }
 }
 
@@ -451,15 +500,16 @@ int main(void)
   setup_timer();
   setup_timer_interrupt();
   serial_puts(USART1, "Initialising...\r\n");
-  set_channel(1, 0);
-  set_channel(2, 0);
-  set_channel(3, 0);
+  set_channel(1, 0, 1);
+  set_channel(2, 0, 1);
+  set_channel(3, 0, 1);
   delay(2000000);
 
   serial_puts(USART1, "Hello world, ready to blink!\r\n");
 
   while (1)
   {
+/*
     set_channel(1, 0);
     set_channel(2, 1);
     set_channel(3, -1);
@@ -475,23 +525,55 @@ int main(void)
     led_on();
     pwm_pulse_width = 2*pwm_period/6;
     delay(m_delay);
-
-    set_channel(1, -1);
-    set_channel(2, 0);
-    set_channel(3, 1);
+*/
+    set_channel(1, -1, 1);
+    set_channel(2, 0, -1);
+    set_channel(3, 1, 1);
     serial_puts(USART1, "c");
     led_off();
     pwm_pulse_width = 3*pwm_period/6;
     delay(m_delay);
 
-    set_channel(1, 0);
-    set_channel(2, -1);
-    set_channel(3, 1);
+    set_channel(1, -1, 0.8);
+    set_channel(2, -1, -0.2);
+    set_channel(3, 1, 1);
+    serial_puts(USART1, "/");
+    led_off();
+    pwm_pulse_width = 3*pwm_period/6;
+    delay(m_delay);
+
+    set_channel(1, -1, 0.60);
+    set_channel(2, -1, -0.40);
+    set_channel(3, 1, 1);
+    serial_puts(USART1, "/");
+    led_off();
+    pwm_pulse_width = 3*pwm_period/6;
+    delay(m_delay);
+
+    set_channel(1, -1, 0.4);
+    set_channel(2, -1, -0.6);
+    set_channel(3, 1, 1);
+    serial_puts(USART1, "/");
+    led_off();
+    pwm_pulse_width = 3*pwm_period/6;
+    delay(m_delay);
+
+    set_channel(1, -1, 0.2);
+    set_channel(2, -1, -0.8);
+    set_channel(3, 1, 1);
+    serial_puts(USART1, "!");
+    led_off();
+    pwm_pulse_width = 3*pwm_period/6;
+    delay(m_delay);
+
+    set_channel(1, 0, 1);
+    set_channel(2, -1, -1);
+    set_channel(3, 1, 1);
     serial_puts(USART1, "d");
     led_on();
     pwm_pulse_width = 4*pwm_period/6;
     delay(m_delay);
-
+/*
     set_channel(1, 1);
     set_channel(2, -1);
     set_channel(3, 0);
@@ -507,6 +589,7 @@ int main(void)
     led_on();
     pwm_pulse_width = pwm_period;
     delay(m_delay);
+*/
   }
 
   return 0;
