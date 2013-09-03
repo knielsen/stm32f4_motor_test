@@ -489,9 +489,40 @@ void TIM5_IRQHandler(void)
 }
 
 
+static void
+channel_interpolate(int a1, int b1, int c1, int a2, int b2, int c2,
+                    uint32_t steps)
+{
+  uint32_t i;
+
+  for (i = 0; i <= steps; ++i)
+  {
+    if (a1 == a2)
+      set_channel(1, a1, 1);
+    else if (a1 == 0)
+      set_channel(1, a2, -(float)i/(float)steps);
+    else if (a2 == 0)
+      set_channel(1, a1, (float)(steps-i)/(float)steps);
+    if (b1 == b2)
+      set_channel(2, b1, 1);
+    else if (b1 == 0)
+      set_channel(2, b2, -(float)i/(float)steps);
+    else if (b2 == 0)
+      set_channel(2, b1, (float)(steps-i)/(float)steps);
+    if (c1 == c2)
+      set_channel(3, c1, 1);
+    else if (c1 == 0)
+      set_channel(3, c2, -(float)i/(float)steps);
+    else if (c2 == 0)
+      set_channel(3, c1, (float)(steps-i)/(float)steps);
+    //println_uint32(USART1, i);
+  }
+}
+
+
 int main(void)
 {
-  static const uint32_t m_delay = 10000000;
+  static const uint32_t m_delay = 5000000;
 
   delay(2000000);
   setup_serial();
@@ -509,87 +540,30 @@ int main(void)
 
   while (1)
   {
-/*
-    set_channel(1, 0);
-    set_channel(2, 1);
-    set_channel(3, -1);
     serial_puts(USART1, "a");
     led_off();
     pwm_pulse_width = pwm_period/6;
-    delay(m_delay);
-
-    set_channel(1, -1);
-    set_channel(2, 1);
-    set_channel(3, 0);
+    channel_interpolate( 0,  1, -1, -1,  1,  0, m_delay);
     serial_puts(USART1, "b");
     led_on();
     pwm_pulse_width = 2*pwm_period/6;
-    delay(m_delay);
-*/
-    set_channel(1, -1, 1);
-    set_channel(2, 0, -1);
-    set_channel(3, 1, 1);
+    channel_interpolate(-1,  1,  0, -1,  0,  1, m_delay);
     serial_puts(USART1, "c");
     led_off();
     pwm_pulse_width = 3*pwm_period/6;
-    delay(m_delay);
-
-    set_channel(1, -1, 0.8);
-    set_channel(2, -1, -0.2);
-    set_channel(3, 1, 1);
-    serial_puts(USART1, "/");
-    led_off();
-    pwm_pulse_width = 3*pwm_period/6;
-    delay(m_delay);
-
-    set_channel(1, -1, 0.60);
-    set_channel(2, -1, -0.40);
-    set_channel(3, 1, 1);
-    serial_puts(USART1, "/");
-    led_off();
-    pwm_pulse_width = 3*pwm_period/6;
-    delay(m_delay);
-
-    set_channel(1, -1, 0.4);
-    set_channel(2, -1, -0.6);
-    set_channel(3, 1, 1);
-    serial_puts(USART1, "/");
-    led_off();
-    pwm_pulse_width = 3*pwm_period/6;
-    delay(m_delay);
-
-    set_channel(1, -1, 0.2);
-    set_channel(2, -1, -0.8);
-    set_channel(3, 1, 1);
-    serial_puts(USART1, "!");
-    led_off();
-    pwm_pulse_width = 3*pwm_period/6;
-    delay(m_delay);
-
-    set_channel(1, 0, 1);
-    set_channel(2, -1, -1);
-    set_channel(3, 1, 1);
+    channel_interpolate(-1,  0,  1,  0, -1,  1, m_delay);
     serial_puts(USART1, "d");
     led_on();
     pwm_pulse_width = 4*pwm_period/6;
-    delay(m_delay);
-/*
-    set_channel(1, 1);
-    set_channel(2, -1);
-    set_channel(3, 0);
+    channel_interpolate( 0, -1,  1,  1, -1,  0, m_delay);
     serial_puts(USART1, "e");
     led_off();
     pwm_pulse_width = 5*pwm_period/6;
-    delay(m_delay);
-
-    set_channel(1, 1);
-    set_channel(2, 0);
-    set_channel(3, -1);
+    channel_interpolate( 1, -1,  0,  1,  0, -1, m_delay);
     serial_puts(USART1, "f");
     led_on();
     pwm_pulse_width = pwm_period;
-    delay(m_delay);
-*/
+    channel_interpolate( 1,  0, -1,  0,  1, -1, m_delay);
   }
 
   return 0;
