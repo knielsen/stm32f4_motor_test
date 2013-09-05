@@ -35,6 +35,7 @@ static volatile int32_t pwm_pulse_width_1 = 0;
 static volatile int32_t pwm_pulse_width_2 = 0;
 static volatile int32_t pwm_pulse_width_3 = 0;
 
+static const float F_PI = 3.141592654f;
 
 static void delay(__IO uint32_t nCount)
 {
@@ -497,25 +498,26 @@ channel_interpolate(int a1, int b1, int c1, int a2, int b2, int c2,
 
   for (i = 0; i <= steps; ++i)
   {
+    float D = (float)i/(float)steps;
+    //D = acosf(1.0f-2.0f*D)/F_PI;
     if (a1 == a2)
       set_channel(1, a1, 1);
     else if (a1 == 0)
-      set_channel(1, a2, -(float)i/(float)steps);
+      set_channel(1, a2, -D);
     else if (a2 == 0)
-      set_channel(1, a1, (float)(steps-i)/(float)steps);
+      set_channel(1, a1, 1.0f-D);
     if (b1 == b2)
       set_channel(2, b1, 1);
     else if (b1 == 0)
-      set_channel(2, b2, -(float)i/(float)steps);
+      set_channel(2, b2, -D);
     else if (b2 == 0)
-      set_channel(2, b1, (float)(steps-i)/(float)steps);
+      set_channel(2, b1, 1.0f-D);
     if (c1 == c2)
       set_channel(3, c1, 1);
     else if (c1 == 0)
-      set_channel(3, c2, -(float)i/(float)steps);
+      set_channel(3, c2, -D);
     else if (c2 == 0)
-      set_channel(3, c1, (float)(steps-i)/(float)steps);
-    //println_uint32(USART1, i);
+      set_channel(3, c1, 1.0f-D);
   }
 }
 
@@ -531,6 +533,11 @@ int main(void)
   setup_timer();
   setup_timer_interrupt();
   serial_puts(USART1, "Initialising...\r\n");
+  println_float(USART1, acosf(1.0f), 1, 4);
+  println_float(USART1, acosf(0.5f), 1, 4);
+  println_float(USART1, acosf(0.0f), 1, 4);
+  println_float(USART1, acosf(-0.5f), 1, 4);
+  println_float(USART1, acosf(-1.0f), 1, 4);
   set_channel(1, 0, 1);
   set_channel(2, 0, 1);
   set_channel(3, 0, 1);
