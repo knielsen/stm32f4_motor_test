@@ -19,21 +19,21 @@
   EN use channel 1/2/3 of TIM4 on PA0/1/2.
   IN 1/2/3 use PA4/PA5/PA8
 */
-#define CHAN_EN1 GPIO_Pin_0  /* Connect to pin 3 on L6234 DIP20 */
-#define CHAN_IN1 GPIO_Pin_4             /* pin 2 */
-#define CHAN_EN2 GPIO_Pin_1             /* pin 18 */
-#define CHAN_IN2 GPIO_Pin_5             /* pin 19 */
-#define CHAN_EN3 GPIO_Pin_2             /* pin 8 */
-#define CHAN_IN3 GPIO_Pin_8             /* pin 9 */
+#define CHAN_EN1 GPIO_Pin_3  /* Connect to pin 3 on L6234 DIP20 */
+#define CHAN_IN1 GPIO_Pin_0             /* pin 2 */
+#define CHAN_EN2 GPIO_Pin_15             /* pin 18 */
+#define CHAN_IN2 GPIO_Pin_1             /* pin 19 */
+#define CHAN_EN3 GPIO_Pin_8             /* pin 8 */
+#define CHAN_IN3 GPIO_Pin_2             /* pin 9 */
 
 
 /* This is apparently needed for libc/libm (eg. powf()). */
 int __errno;
 
 static volatile uint32_t pwm_pulse_width = 0;
-static volatile int32_t pwm_pulse_width_1 = 0;
-static volatile int32_t pwm_pulse_width_2 = 0;
-static volatile int32_t pwm_pulse_width_3 = 0;
+static volatile uint32_t pwm_pulse_width_1 = 0;
+static volatile uint32_t pwm_pulse_width_2 = 0;
+static volatile uint32_t pwm_pulse_width_3 = 0;
 
 static const float F_PI = 3.141592654f;
 
@@ -85,7 +85,7 @@ setup_gpio(void)
   GPIO_InitTypeDef GPIO_InitStructure;
 
   RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA, ENABLE);
-  GPIO_InitStructure.GPIO_Pin = CHAN_IN1|CHAN_IN2|CHAN_IN3;
+  GPIO_InitStructure.GPIO_Pin = CHAN_EN1|CHAN_EN2|CHAN_EN3;
   GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_OUT;
   GPIO_InitStructure.GPIO_Speed = GPIO_Speed_25MHz;
   GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
@@ -207,6 +207,7 @@ setup_led(void)
 }
 
 
+__attribute__ ((unused))
 static void
 led_on(void)
 {
@@ -214,6 +215,7 @@ led_on(void)
 }
 
 
+__attribute__ ((unused))
 static void
 led_off(void)
 {
@@ -221,56 +223,23 @@ led_off(void)
 }
 
 
-/*
-  Set a channel to given level (-1, 0, or 1).
-
-  LEVEL set to 0 turns off the channel (EN=0).
-  LEVEL set to -1 or 1 turns on the channel (EN=1) and sets IN=0 or 1.
-
-  DUTY controls the PWM and polarity.
-  The absolute value of DUTY sets the duty cycle for EN (0->0%, 1->100%).
-
-  The sign sets the polarity (positive enables at the start of the PWM period,
-  negative at the nd of the period).
-*/
 static void
-set_channel(unsigned channel, int level, float duty)
+enable_channels(void)
 {
-  unsigned in;
-  volatile int32_t *enable;
-  int32_t period;
+  GPIO_SetBits(GPIOA, CHAN_EN1);
+  GPIO_SetBits(GPIOA, CHAN_EN2);
+  GPIO_SetBits(GPIOA, CHAN_EN3);
+}
 
-  switch (channel)
-  {
-  case 1:
-    enable = &pwm_pulse_width_1;
-    in = CHAN_IN1;
-    break;
-  case 2:
-    enable = &pwm_pulse_width_2;
-    in = CHAN_IN2;
-    break;
-  case 3:
-    enable = &pwm_pulse_width_3;
-    in = CHAN_IN3;
-    break;
-  default:
-    return;
-  }
 
-  period = (int32_t)(duty*pwm_period);
-  if (level < 0)
-  {
-    *enable = period;
-    GPIO_ResetBits(GPIOA, in);
-  }
-  else if (level > 0)
-  {
-    *enable = period;
-    GPIO_SetBits(GPIOA, in);
-  }
-  else
-    *enable = 0;
+/* Set channel PWMs, duty cycle of 0.0..1.0 (0..100%). */
+static void
+set_channels(float duty1, float duty2, float duty3)
+{
+  static const float damper = 0.7f;
+  pwm_pulse_width_1 = damper*duty1*pwm_period;
+  pwm_pulse_width_2 = damper*duty2*pwm_period;
+  pwm_pulse_width_3 = damper*duty3*pwm_period;
 }
 
 
@@ -445,88 +414,21 @@ void TIM4_IRQHandler(void)
 
 void TIM5_IRQHandler(void)
 {
-  int32_t tmp;
-
   if (TIM_GetITStatus(TIM5, TIM_IT_Update) != RESET)
   {
     TIM_ClearITPendingBit(TIM5, TIM_IT_Update);
-
-    tmp = pwm_pulse_width_1;
-    if (tmp < 0)
-    {
-      TIM5->CCR1 = pwm_period + (uint32_t)tmp;
-      TIM_OC1PolarityConfig(TIM5, TIM_OCPolarity_Low);
-    }
-    else
-    {
-      TIM5->CCR1 = (uint32_t)tmp;
-      TIM_OC1PolarityConfig(TIM5, TIM_OCPolarity_High);
-    }
-
-    tmp = pwm_pulse_width_2;
-    if (tmp < 0)
-    {
-      TIM5->CCR2 = pwm_period +  (uint32_t)tmp;
-      TIM_OC2PolarityConfig(TIM5, TIM_OCPolarity_Low);
-    }
-    else
-    {
-      TIM5->CCR2 = (uint32_t)tmp;
-      TIM_OC2PolarityConfig(TIM5, TIM_OCPolarity_High);
-    }
-
-    tmp = pwm_pulse_width_3;
-    if (tmp < 0)
-    {
-      TIM5->CCR3 = pwm_period + (uint32_t)tmp;
-      TIM_OC3PolarityConfig(TIM5, TIM_OCPolarity_Low);
-    }
-    else
-    {
-      TIM5->CCR3 = (uint32_t)tmp;
-      TIM_OC3PolarityConfig(TIM5, TIM_OCPolarity_High);
-    }
+    TIM5->CCR1 = pwm_pulse_width_1;
+    TIM5->CCR2 = pwm_pulse_width_2;
+    TIM5->CCR3 = pwm_pulse_width_3;
   }
 }
 
 
-static void
-channel_interpolate(int a1, int b1, int c1, int a2, int b2, int c2,
-                    uint32_t steps)
+int
+main(void)
 {
-  uint32_t i;
+  static const uint32_t m_delay = 1500000;
 
-  for (i = 0; i <= steps; ++i)
-  {
-    float D = (float)i/(float)steps;
-    //D = acosf(1.0f-2.0f*D)/F_PI;
-    if (a1 == a2)
-      set_channel(1, a1, 1);
-    else if (a1 == 0)
-      set_channel(1, a2, -D);
-    else if (a2 == 0)
-      set_channel(1, a1, 1.0f-D);
-    if (b1 == b2)
-      set_channel(2, b1, 1);
-    else if (b1 == 0)
-      set_channel(2, b2, -D);
-    else if (b2 == 0)
-      set_channel(2, b1, 1.0f-D);
-    if (c1 == c2)
-      set_channel(3, c1, 1);
-    else if (c1 == 0)
-      set_channel(3, c2, -D);
-    else if (c2 == 0)
-      set_channel(3, c1, 1.0f-D);
-  }
-}
-
-
-int main(void)
-{
-  static const uint32_t m_delay = 5000000;
-
-  delay(2000000);
   setup_serial();
   setup_gpio();
   setup_led();
@@ -538,39 +440,26 @@ int main(void)
   println_float(USART1, acosf(0.0f), 1, 4);
   println_float(USART1, acosf(-0.5f), 1, 4);
   println_float(USART1, acosf(-1.0f), 1, 4);
-  set_channel(1, 0, 1);
-  set_channel(2, 0, 1);
-  set_channel(3, 0, 1);
+  set_channels(0.0f, 0.0f, 0.0f);
+  enable_channels();
   delay(2000000);
 
   serial_puts(USART1, "Hello world, ready to blink!\r\n");
 
   while (1)
   {
-    serial_puts(USART1, "a");
-    led_off();
-    pwm_pulse_width = pwm_period/6;
-    channel_interpolate( 0,  1, -1, -1,  1,  0, m_delay);
-    serial_puts(USART1, "b");
-    led_on();
-    pwm_pulse_width = 2*pwm_period/6;
-    channel_interpolate(-1,  1,  0, -1,  0,  1, m_delay);
-    serial_puts(USART1, "c");
-    led_off();
-    pwm_pulse_width = 3*pwm_period/6;
-    channel_interpolate(-1,  0,  1,  0, -1,  1, m_delay);
-    serial_puts(USART1, "d");
-    led_on();
-    pwm_pulse_width = 4*pwm_period/6;
-    channel_interpolate( 0, -1,  1,  1, -1,  0, m_delay);
-    serial_puts(USART1, "e");
-    led_off();
-    pwm_pulse_width = 5*pwm_period/6;
-    channel_interpolate( 1, -1,  0,  1,  0, -1, m_delay);
-    serial_puts(USART1, "f");
-    led_on();
-    pwm_pulse_width = pwm_period;
-    channel_interpolate( 1,  0, -1,  0,  1, -1, m_delay);
+    uint32_t i;
+
+    for (i= 0; i < m_delay; ++i)
+    {
+      uint32_t j = (i + m_delay/3) % m_delay;
+      uint32_t k = (i + 2*m_delay/3) % m_delay;
+      set_channels(0.5f*(1.0f+sinf((2.0f*F_PI)*((float)i/(float)m_delay))),
+                   0.5f*(1.0f+sinf((2.0f*F_PI)*((float)j/(float)m_delay))),
+                   0.5f*(1.0f+sinf((2.0f*F_PI)*((float)k/(float)m_delay))));
+      pwm_pulse_width = 0.5f*(1.0f+sinf((2.0f*F_PI)*((float)i/(float)m_delay)))*pwm_period;
+    }
+    serial_puts(USART1, ".");
   }
 
   return 0;
