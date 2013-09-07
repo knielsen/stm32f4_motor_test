@@ -14,6 +14,8 @@
 #include <stm32f4_discovery.h>
 
 
+#define USE_DISCOVERY_BOARD
+
 /*
   I/O pins used to control the motor driver.
   EN use channel 1/2/3 of TIM4 on PA0/1/2.
@@ -26,6 +28,39 @@
 #define CHAN_EN3 GPIO_Pin_8             /* pin 8 */
 #define CHAN_IN3 GPIO_Pin_2             /* pin 9 */
 
+#ifndef USE_DISCOVERY_BOARD
+/*
+  This for my own STM32F4 board, using PA9 for TX on USART1 for serial output.
+  And LED on PG15.
+*/
+#define SERIAL_USART USART1
+#define SERIAL_PERIPH RCC_APB2Periph_USART1
+#define SERIAL_TX_PERIPH RCC_AHB1Periph_GPIOA
+#define SERIAL_TX_PIN GPIO_Pin_9
+#define SERIAL_TX_PINSOURCE GPIO_PinSource9
+#define SERIAL_TX_AF GPIO_AF_USART1
+#define SERIAL_TX_GPIO GPIOA
+
+#define LED_PERIPH RCC_AHB1Periph_GPIOG
+#define LED_PIN GPIO_Pin_15
+#define LED_GPIO GPIOG
+
+#else  /* USE_DISCOVERY_BOARD */
+
+/* This for STM32F4 Discovery board, serial on PC6, LED on PD12. */
+#define SERIAL_USART USART6
+#define SERIAL_PERIPH RCC_APB2Periph_USART6
+#define SERIAL_TX_PERIPH RCC_AHB1Periph_GPIOC
+#define SERIAL_TX_PIN GPIO_Pin_6
+#define SERIAL_TX_PINSOURCE GPIO_PinSource6
+#define SERIAL_TX_AF GPIO_AF_USART6
+#define SERIAL_TX_GPIO GPIOC
+
+#define LED_PERIPH RCC_AHB1Periph_GPIOD
+#define LED_PIN GPIO_Pin_12
+#define LED_GPIO GPIOG
+
+#endif
 
 /* This is apparently needed for libc/libm (eg. powf()). */
 int __errno;
@@ -49,23 +84,22 @@ static void setup_serial(void)
   GPIO_InitTypeDef GPIO_InitStructure;
   USART_InitTypeDef USART_InitStructure;
 
-  /* enable peripheral clock for USART1 */
-  RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART1, ENABLE);
+  /* enable peripheral clock for USART */
+  RCC_APB2PeriphClockCmd(SERIAL_PERIPH, ENABLE);
 
-  /* GPIOA clock enable */
-  RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA, ENABLE);
+  /* GPIO clock enable */
+  RCC_AHB1PeriphClockCmd(SERIAL_TX_PERIPH, ENABLE);
 
-  /* GPIOA Configuration:  USART1 TX on PA9 */
-  GPIO_InitStructure.GPIO_Pin = GPIO_Pin_9;
+  /* GPIO Configuration TX. */
+  GPIO_InitStructure.GPIO_Pin = SERIAL_TX_PIN;
   GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
   GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
   GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
   GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP ;
-  GPIO_Init(GPIOA, &GPIO_InitStructure);
+  GPIO_Init(SERIAL_TX_GPIO, &GPIO_InitStructure);
 
-  /* Connect USART1 pins to AF2 */
-  // TX = PA9
-  GPIO_PinAFConfig(GPIOA, GPIO_PinSource9, GPIO_AF_USART1);
+  /* Connect USART pins to AF2 */
+  GPIO_PinAFConfig(SERIAL_TX_GPIO, SERIAL_TX_PINSOURCE, SERIAL_TX_AF);
 
   USART_InitStructure.USART_BaudRate = 115200;
   USART_InitStructure.USART_WordLength = USART_WordLength_8b;
@@ -73,9 +107,9 @@ static void setup_serial(void)
   USART_InitStructure.USART_Parity = USART_Parity_No;
   USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
   USART_InitStructure.USART_Mode = USART_Mode_Tx;
-  USART_Init(USART1, &USART_InitStructure);
+  USART_Init(SERIAL_USART, &USART_InitStructure);
 
-  USART_Cmd(USART1, ENABLE); // enable USART1
+  USART_Cmd(SERIAL_USART, ENABLE); // enable USART
 }
 
 
@@ -103,29 +137,40 @@ setup_timer(void)
   TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
   TIM_OCInitTypeDef TIM_OCInitStructure;
 
+#ifndef USE_DISCOVERY_BOARD
   RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, ENABLE);
   RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, ENABLE);
+#endif
   RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM5, ENABLE);
   RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA, ENABLE);
+#ifndef USE_DISCOVERY_BOARD
   RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOB, ENABLE);
+#endif
 
-  GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0 | GPIO_Pin_1 | GPIO_Pin_2 |
-    GPIO_Pin_6 | GPIO_Pin_7;
+  GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0 | GPIO_Pin_1 | GPIO_Pin_2
+#ifndef USE_DISCOVERY_BOARD
+    | GPIO_Pin_6 | GPIO_Pin_7
+#endif
+    ;
   GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
   GPIO_InitStructure.GPIO_Speed = GPIO_Speed_25MHz;
   GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
   GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL ;
   GPIO_Init(GPIOA, &GPIO_InitStructure);
+#ifndef USE_DISCOVERY_BOARD
   GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0 | GPIO_Pin_6 | GPIO_Pin_7 |
     GPIO_Pin_8;
   GPIO_Init(GPIOB, &GPIO_InitStructure);
+#endif
 
+#ifndef USE_DISCOVERY_BOARD
   GPIO_PinAFConfig(GPIOA, GPIO_PinSource6, GPIO_AF_TIM3);
   GPIO_PinAFConfig(GPIOA, GPIO_PinSource7, GPIO_AF_TIM3);
   GPIO_PinAFConfig(GPIOB, GPIO_PinSource0, GPIO_AF_TIM3);
   GPIO_PinAFConfig(GPIOB, GPIO_PinSource6, GPIO_AF_TIM4);
   GPIO_PinAFConfig(GPIOB, GPIO_PinSource7, GPIO_AF_TIM4);
   GPIO_PinAFConfig(GPIOB, GPIO_PinSource8, GPIO_AF_TIM4);
+#endif
   GPIO_PinAFConfig(GPIOA, GPIO_PinSource0, GPIO_AF_TIM5);
   GPIO_PinAFConfig(GPIOA, GPIO_PinSource1, GPIO_AF_TIM5);
   GPIO_PinAFConfig(GPIOA, GPIO_PinSource2, GPIO_AF_TIM5);
@@ -134,8 +179,10 @@ setup_timer(void)
   TIM_TimeBaseStructure.TIM_Prescaler = 0;
   TIM_TimeBaseStructure.TIM_ClockDivision = 0;
   TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
+#ifndef USE_DISCOVERY_BOARD
   TIM_TimeBaseInit(TIM3, &TIM_TimeBaseStructure);
   TIM_TimeBaseInit(TIM4, &TIM_TimeBaseStructure);
+#endif
   TIM_TimeBaseInit(TIM5, &TIM_TimeBaseStructure);
 
   TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
@@ -143,30 +190,38 @@ setup_timer(void)
   TIM_OCInitStructure.TIM_Pulse = 0;
   TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
 
+#ifndef USE_DISCOVERY_BOARD
   TIM_OC1Init(TIM3, &TIM_OCInitStructure);
   TIM_OC2Init(TIM3, &TIM_OCInitStructure);
   TIM_OC3Init(TIM3, &TIM_OCInitStructure);
   TIM_OC1Init(TIM4, &TIM_OCInitStructure);
   TIM_OC2Init(TIM4, &TIM_OCInitStructure);
   TIM_OC3Init(TIM4, &TIM_OCInitStructure);
+#endif
   TIM_OC1Init(TIM5, &TIM_OCInitStructure);
   TIM_OC2Init(TIM5, &TIM_OCInitStructure);
   TIM_OC3Init(TIM5, &TIM_OCInitStructure);
 
+#ifndef USE_DISCOVERY_BOARD
   TIM_OC1PreloadConfig(TIM3, TIM_OCPreload_Enable);
   TIM_OC2PreloadConfig(TIM3, TIM_OCPreload_Enable);
   TIM_OC3PreloadConfig(TIM3, TIM_OCPreload_Enable);
   TIM_OC1PreloadConfig(TIM4, TIM_OCPreload_Enable);
   TIM_OC2PreloadConfig(TIM4, TIM_OCPreload_Enable);
   TIM_OC3PreloadConfig(TIM4, TIM_OCPreload_Enable);
+#endif
   TIM_OC1PreloadConfig(TIM5, TIM_OCPreload_Enable);
   TIM_OC2PreloadConfig(TIM5, TIM_OCPreload_Enable);
   TIM_OC3PreloadConfig(TIM5, TIM_OCPreload_Enable);
+#ifndef USE_DISCOVERY_BOARD
   TIM_ARRPreloadConfig(TIM3, ENABLE);
   TIM_ARRPreloadConfig(TIM4, ENABLE);
+#endif
   TIM_ARRPreloadConfig(TIM5, ENABLE);
+#ifndef USE_DISCOVERY_BOARD
   TIM_Cmd(TIM3, ENABLE);
   TIM_Cmd(TIM4, ENABLE);
+#endif
   TIM_Cmd(TIM5, ENABLE);
 }
 
@@ -176,18 +231,22 @@ setup_timer_interrupt(void)
 {
   NVIC_InitTypeDef NVIC_InitStructure;
 
-  NVIC_InitStructure.NVIC_IRQChannel = TIM3_IRQn;
   NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 10;
   NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
   NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+#ifndef USE_DISCOVERY_BOARD
+  NVIC_InitStructure.NVIC_IRQChannel = TIM3_IRQn;
   NVIC_Init(&NVIC_InitStructure);
   NVIC_InitStructure.NVIC_IRQChannel = TIM4_IRQn;
   NVIC_Init(&NVIC_InitStructure);
+#endif
   NVIC_InitStructure.NVIC_IRQChannel = TIM5_IRQn;
   NVIC_Init(&NVIC_InitStructure);
 
+#ifndef USE_DISCOVERY_BOARD
   TIM_ITConfig(TIM3, TIM_IT_Update, ENABLE);
   TIM_ITConfig(TIM4, TIM_IT_Update, ENABLE);
+#endif
   TIM_ITConfig(TIM5, TIM_IT_Update, ENABLE);
 }
 
@@ -197,13 +256,13 @@ setup_led(void)
 {
   GPIO_InitTypeDef GPIO_InitStructure;
 
-  RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOG, ENABLE);
-  GPIO_InitStructure.GPIO_Pin = GPIO_Pin_15;
+  RCC_AHB1PeriphClockCmd(LED_PERIPH, ENABLE);
+  GPIO_InitStructure.GPIO_Pin = LED_PIN;
   GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_OUT;
   GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
   GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
   GPIO_InitStructure.GPIO_PuPd  = GPIO_PuPd_NOPULL;
-  GPIO_Init(GPIOG, &GPIO_InitStructure);
+  GPIO_Init(LED_GPIO, &GPIO_InitStructure);
 }
 
 
@@ -211,7 +270,7 @@ __attribute__ ((unused))
 static void
 led_on(void)
 {
-  GPIO_SetBits(GPIOG, GPIO_Pin_15);
+  GPIO_SetBits(LED_GPIO, LED_PIN);
 }
 
 
@@ -219,7 +278,7 @@ __attribute__ ((unused))
 static void
 led_off(void)
 {
-  GPIO_ResetBits(GPIOG, GPIO_Pin_15);
+  GPIO_ResetBits(LED_GPIO, LED_PIN);
 }
 
 
@@ -434,17 +493,17 @@ main(void)
   setup_led();
   setup_timer();
   setup_timer_interrupt();
-  serial_puts(USART1, "Initialising...\r\n");
-  println_float(USART1, acosf(1.0f), 1, 4);
-  println_float(USART1, acosf(0.5f), 1, 4);
-  println_float(USART1, acosf(0.0f), 1, 4);
-  println_float(USART1, acosf(-0.5f), 1, 4);
-  println_float(USART1, acosf(-1.0f), 1, 4);
+  serial_puts(SERIAL_USART, "Initialising...\r\n");
+  println_float(SERIAL_USART, acosf(1.0f), 1, 4);
+  println_float(SERIAL_USART, acosf(0.5f), 1, 4);
+  println_float(SERIAL_USART, acosf(0.0f), 1, 4);
+  println_float(SERIAL_USART, acosf(-0.5f), 1, 4);
+  println_float(SERIAL_USART, acosf(-1.0f), 1, 4);
   set_channels(0.0f, 0.0f, 0.0f);
   enable_channels();
   delay(2000000);
 
-  serial_puts(USART1, "Hello world, ready to blink!\r\n");
+  serial_puts(SERIAL_USART, "Hello world, ready to blink!\r\n");
 
   while (1)
   {
@@ -459,7 +518,7 @@ main(void)
                    0.5f*(1.0f+sinf((2.0f*F_PI)*((float)k/(float)m_delay))));
       pwm_pulse_width = 0.5f*(1.0f+sinf((2.0f*F_PI)*((float)i/(float)m_delay)))*pwm_period;
     }
-    serial_puts(USART1, ".");
+    serial_puts(SERIAL_USART, ".");
   }
 
   return 0;
