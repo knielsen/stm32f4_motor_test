@@ -35,6 +35,7 @@
 */
 #define SERIAL_USART USART1
 #define SERIAL_PERIPH RCC_APB2Periph_USART1
+#define SERIAL_CLOCK_COMMAND_FUNC RCC_APB2PeriphClockCmd
 #define SERIAL_TX_PERIPH RCC_AHB1Periph_GPIOA
 #define SERIAL_TX_PIN GPIO_Pin_9
 #define SERIAL_TX_PINSOURCE GPIO_PinSource9
@@ -47,14 +48,15 @@
 
 #else  /* USE_DISCOVERY_BOARD */
 
-/* This for STM32F4 Discovery board, serial on PC6, LED on PD12. */
-#define SERIAL_USART USART6
-#define SERIAL_PERIPH RCC_APB2Periph_USART6
-#define SERIAL_TX_PERIPH RCC_AHB1Periph_GPIOC
-#define SERIAL_TX_PIN GPIO_Pin_6
-#define SERIAL_TX_PINSOURCE GPIO_PinSource6
-#define SERIAL_TX_AF GPIO_AF_USART6
-#define SERIAL_TX_GPIO GPIOC
+/* This for STM32F4 Discovery board, serial on PD8, LED on PD12. */
+#define SERIAL_USART USART3
+#define SERIAL_PERIPH RCC_APB1Periph_USART3
+#define SERIAL_CLOCK_COMMAND_FUNC RCC_APB1PeriphClockCmd
+#define SERIAL_TX_PERIPH RCC_AHB1Periph_GPIOD
+#define SERIAL_TX_PIN GPIO_Pin_8
+#define SERIAL_TX_PINSOURCE GPIO_PinSource8
+#define SERIAL_TX_AF GPIO_AF_USART3
+#define SERIAL_TX_GPIO GPIOD
 
 #define LED_PERIPH RCC_AHB1Periph_GPIOD
 #define LED_PIN GPIO_Pin_12
@@ -85,7 +87,7 @@ static void setup_serial(void)
   USART_InitTypeDef USART_InitStructure;
 
   /* enable peripheral clock for USART */
-  RCC_APB2PeriphClockCmd(SERIAL_PERIPH, ENABLE);
+  SERIAL_CLOCK_COMMAND_FUNC(SERIAL_PERIPH, ENABLE);
 
   /* GPIO clock enable */
   RCC_AHB1PeriphClockCmd(SERIAL_TX_PERIPH, ENABLE);
